@@ -1,14 +1,28 @@
-const DB_NAME='little-things-db', STORE='memories';let memories=[];const $=s=>document.querySelector(s), dialog=$('#composer');
-function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function dbPut(item){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(item);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
-async function dbDelete(id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
-async function dbAll(){const db=await openDB();return new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+let memories=[];
+const $=s=>document.querySelector(s);
 const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-function render(){const q=$('#searchInput').value.toLowerCase();const list=memories.filter(m=>(m.title+' '+m.note).toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date));$('#memoryCount').textContent=memories.length;const grid=$('#memoryGrid');grid.innerHTML='';if(!list.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">✎</div><h3>No memories yet</h3><p>Add a photo, a thought, or a tiny moment you want to remember.</p><button class="secondary-button" id="emptyAdd">Create first memory</button></div>';$('#emptyAdd').onclick=()=>dialog.showModal();return}list.forEach((m,i)=>{const card=$('#memoryTemplate').content.cloneNode(true),article=card.querySelector('article');article.style.setProperty('--tilt',`${i%2?'.7':'-0.7'}deg`);const img=card.querySelector('.card-image');img.src=m.images?.[0]||'';img.alt=m.title;card.querySelector('.date-badge').textContent=new Date(m.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'});card.querySelector('.card-date').textContent=fmt(m.date);card.querySelector('.card-title').textContent=m.title;card.querySelector('.card-note').textContent=m.note||'';card.querySelector('.delete-button').onclick=async()=>{if(confirm('Delete this memory?')){await dbDelete(m.id);memories=memories.filter(x=>x.id!==m.id);render()}};grid.append(card)})}
-async function load(){memories=await dbAll();render()}function resetForm(){$('#memoryForm').reset();$('#memoryDate').value=new Date().toISOString().slice(0,10);$('#imagePreview').innerHTML=''}
-$('#openComposer').onclick=()=>{resetForm();dialog.showModal()};$('#cancelComposer').onclick=()=>dialog.close();$('#closeComposer').onclick=()=>dialog.close();$('#searchInput').oninput=render;$('#year').textContent=new Date().getFullYear();
-$('#memoryImages').onchange=e=>{$('#imagePreview').innerHTML='';[...e.target.files].forEach(f=>{if(f.size<=10*1024*1024){const img=document.createElement('img');img.src=URL.createObjectURL(f);$('#imagePreview').append(img)}})};
-$('#memoryForm').onsubmit=async e=>{e.preventDefault();const files=[...$('#memoryImages').files];const images=await Promise.all(files.map(f=>new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f)})));const item={id:crypto.randomUUID(),date:$('#memoryDate').value,title:$('#memoryTitle').value.trim(),note:$('#memoryNote').value.trim(),images};await dbPut(item);memories.push(item);dialog.close();render()};
-$('#exportButton').onclick=()=>{const blob=new Blob([JSON.stringify(memories)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`little-things-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)};
-$('#importInput').onchange=e=>{const file=e.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=async()=>{try{const incoming=JSON.parse(rd.result);for(const m of incoming){if(m.id&&m.date&&m.title)await dbPut(m)}memories=await dbAll();render();alert('Backup imported successfully.')}catch{alert('That file is not a valid scrapbook backup.')}};rd.readAsText(file)};
-$('#themeToggle').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=dark?'':'dark';$('#themeToggle').textContent=dark?'☾':'☀'};load();
+
+function render(){
+  const q=$('#searchInput').value.toLowerCase();
+  const list=memories.filter(m=>(m.title+' '+m.note).toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date));
+  $('#memoryCount').textContent=list.length;
+  const grid=$('#memoryGrid'); grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<div class="empty-state"><div class="empty-icon">✎</div><h3>No memories found</h3><p>Try another search or add a memory to memories.json.</p></div>';return}
+  list.forEach((m,i)=>{
+    const card=$('#memoryTemplate').content.cloneNode(true),article=card.querySelector('article');
+    article.style.setProperty('--tilt',`${i%2?'.7':'-0.7'}deg`);
+    const img=card.querySelector('.card-image'); img.src=m.images?.[0]||''; img.alt=m.title;
+    if(!m.images?.[0]) img.style.display='none';
+    card.querySelector('.date-badge').textContent=new Date(m.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'});
+    card.querySelector('.card-date').textContent=fmt(m.date);
+    card.querySelector('.card-title').textContent=m.title;
+    card.querySelector('.card-note').textContent=m.note||'';
+    grid.append(card);
+  });
+}
+
+$('#searchInput').oninput=render;
+$('#jsonGuide').onclick=()=>alert('Add a new object to memories.json, put your image in the images folder, then push the changes to GitHub.');
+$('#themeToggle').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=dark?'':'dark';$('#themeToggle').textContent=dark?'☾':'☀'};
+$('#year').textContent=new Date().getFullYear();
+fetch('./memories.json').then(r=>r.json()).then(data=>{memories=data;render()}).catch(()=>{$('#memoryGrid').innerHTML='<div class="empty-state"><h3>Could not load memories.json</h3><p>Run the site through Vercel or a local web server.</p></div>'});
