@@ -22,7 +22,6 @@ function render(){
 }
 
 $('#searchInput').oninput=render;
-$('#jsonGuide').onclick=()=>alert('Add a new object to memories.json, put your image in the images folder, then push the changes to GitHub.');
 $('#themeToggle').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=dark?'':'dark';$('#themeToggle').textContent=dark?'☾':'☀'};
 $('#year').textContent=new Date().getFullYear();
 fetch('./memories.json').then(r=>r.json()).then(data=>{memories=data;render()}).catch(()=>{$('#memoryGrid').innerHTML='<div class="empty-state"><h3>Could not load memories.json</h3><p>Run the site through Vercel or a local web server.</p></div>'});
